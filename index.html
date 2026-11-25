@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AtlasX Live</title>
+<meta name="robots" content="noindex">
+<style>
+/* Layout: phone-first single column: status strip, live value, coin chart with tabs, trade log */
+:root{
+  --bg:#f4f5f7;--panel:#fff;--fg:#121821;--muted:#5c6675;--line:#dde1e7;
+  --up:#13834f;--down:#c23b3b;--sma:#c07a12;--accent:#2457c5;--hold:#8a94a3;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--sans:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0d1117;--panel:#151b23;--fg:#e6eaf0;--muted:#97a1af;--line:#29313c;
+  --up:#3fbf7f;--down:#ef6b6b;--sma:#e3a33a;--accent:#7aa2ff;--hold:#7b8594;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 var(--sans)}
+.wrap{max-width:760px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 40px max(16px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:12px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+h1{font-size:20px;margin:0;letter-spacing:-.01em}
+.live{font:12px var(--mono);color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.on{background:var(--up);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.dot.on{animation:none}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.big{font:600 32px/1.1 var(--mono);font-variant-numeric:tabular-nums}
+.sub{color:var(--muted);font-size:13px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:10px}
+.kv{background:var(--bg);border-radius:8px;padding:8px 10px;min-width:0}
+.kv b{display:block;font:600 15px var(--mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.kv span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.pos{color:var(--up)}.neg{color:var(--down)}
+.tabs{display:flex;gap:6px;margin-bottom:8px}
+.tabs button{font:600 13px var(--sans);border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:6px 12px;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+.coinline{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;margin-bottom:6px}
+.pill{font:600 11px var(--mono);padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.04em}
+.pill.in{background:color-mix(in srgb,var(--up) 18%,transparent);color:var(--up)}
+.pill.out{background:color-mix(in srgb,var(--hold) 22%,transparent);color:var(--muted)}
+canvas{width:100%;height:260px;display:block}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:500;font-size:12px}
+.tbl{overflow-x:auto}
+.note{font-size:12px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>AtlasX paper bot</h1>
+    <div class="live"><span class="dot" id="dot"></span><span id="liveTxt">Connecting to Coinbase…</span></div>
+  </header>
+
+  <section class="card" aria-label="Portfolio">
+    <div class="sub">Paper portfolio value, live</div>
+    <div class="big" id="value">—</div>
+    <div class="sub" id="since">—</div>
+    <div class="row">
+      <div class="kv"><span>Holding</span><b id="holding">—</b></div>
+      <div class="kv"><span>50/50 hold</span><b id="hold">—</b></div>
+      <div class="kv"><span>Next check</span><b id="next">—</b></div>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Chart">
+    <div class="tabs" role="group" aria-label="Coin">
+      <button type="button" data-coin="BTC" aria-pressed="true">BTC</button>
+      <button type="button" data-coin="ETH" aria-pressed="false">ETH</button>
+    </div>
+    <div class="coinline"><span id="coinPrice">—</span><span id="coinState"></span></div>
+    <canvas id="chart" aria-label="Price chart with 200-day average and trades" role="img"></canvas>
+    <div class="legend"><span><i style="background:var(--accent)"></i>Price (EUR)</span><span><i style="background:var(--sma)"></i>200-day average</span><span>▲ paper buy · ▼ paper sell</span></div>
+  </section>
+
+  <section class="card" aria-label="Trades">
+    <div class="sub" style="margin-bottom:6px">Paper trades</div>
+    <div class="tbl"><table><thead><tr><th>Date (UTC)</th><th>Coin</th><th>Side</th><th>EUR</th><th>Price</th></tr></thead><tbody id="trades"><tr><td colspan="5" class="note">No paper trades yet. The bot holds cash until a coin closes above its 200-day average on a Monday.</td></tr></tbody></table></div>
+  </section>
+
+  <p class="note" id="foot">Paper money only. No real orders. Prices update live from Coinbase every 15 seconds; the bot itself decides trades at its Tuesday 00:15 UTC check and its daily run, and this page shows its saved state from <span id="stateTime">—</span>.</p>
+</div>
+
+<script>
+const API='https://api.exchange.coinbase.com/products/';
+const COINS=['BTC','ETH'], START_EUR=500, START_DAY='2026-11-25';
+let state=null, candles={}, live={}, coin='BTC';
+const $=id=>document.getElementById(id);
+const eur=(v,d=2)=>'€'+Number(v).toLocaleString('en-IE',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct=v=>(v>=0?'+':'')+(v*100).toFixed(1)+'%';
+const sma=(arr,i,n=200)=>{if(i<n-1)return null;let s=0;for(let k=i-n+1;k<=i;k++)s+=arr[k];return s/n};
+
+async function getJSON(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error(r.status);return r.json()}
+
+async function loadState(){
+  try{state=await getJSON('state.json?'+Date.now());$('stateTime').textContent=(state.saved_at_utc||'').replace('T',' ').slice(0,16)+' UTC'}
+  catch{state=null;$('stateTime').textContent='— (no saved state yet)'}
+}
+async function loadCandles(){
+  for(const c of COINS){
+    const rows=await getJSON(`${API}${c}-EUR/candles?granularity=86400`);
+    candles[c]=rows.map(r=>({t:new Date(r[0]*1000).toISOString().slice(0,10),o:r[3],c:r[4]})).sort((a,b)=>a.t<b.t?-1:1);
+  }
+}
+async function tick(){
+  try{
+    for(const c of COINS){const t=await getJSON(`${API}${c}-EUR/ticker`);live[c]=+t.price}
+    $('dot').className='dot on';$('liveTxt').textContent='Live · '+new Date().toLocaleTimeString();
+  }catch{$('dot').className='dot';$('liveTxt').textContent='Price feed paused, retrying…'}
+  render();
+}
+
+function holdings(){
+  if(!state)return{cash:START_EUR,BTC:0,ETH:0};
+  return{cash:+state.cash,BTC:+state.holdings.BTC,ETH:+state.holdings.ETH};
+}
+function render(){
+  if(!live.BTC||!candles.BTC)return;
+  const h=holdings(), vals={BTC:h.BTC*live.BTC,ETH:h.ETH*live.ETH}, total=h.cash+vals.BTC+vals.ETH;
+  $('value').textContent=eur(total);
+  const ch=total/START_EUR-1;$('since').innerHTML='';
+  const s=document.createElement('span');s.className=ch>=0?'pos':'neg';s.textContent=pct(ch);$('since').append(s,document.createTextNode(` since start (${START_DAY}, ${eur(START_EUR,0)})${state&&state.halted?' · STOPPED by the 25% kill-switch':''}`));
+  const parts=[['BTC',vals.BTC],['ETH',vals.ETH],['cash',h.cash]].filter(p=>p[1]>0.005).map(p=>`${Math.round(p[1]/total*100)}% ${p[0]}`);
+  $('holding').textContent=parts.join(' · ')||'—';
+  const startC={};for(const c of COINS){const d=candles[c].find(x=>x.t>=START_DAY);startC[c]=d?d.o:null}
+  if(startC.BTC&&startC.ETH){const hv=250/startC.BTC*live.BTC+250/startC.ETH*live.ETH;$('hold').textContent=eur(hv)+' ('+pct(hv/START_EUR-1)+')'}
+  const now=new Date(),n=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate(),0,15));
+  while(n.getUTCDay()!==2||n<=now)n.setUTCDate(n.getUTCDate()+1);
+  const hrs=Math.floor((n-now)/36e5);$('next').textContent=(hrs>=24?Math.floor(hrs/24)+' d ':'')+(hrs%24)+' h';
+  renderCoin();renderTrades();
+}
+function renderCoin(){
+  const cs=candles[coin];if(!cs)return;
+  const closes=cs.map(x=>x.c);const last=closes.length-1;const avg=sma(closes,last);
+  const p=live[coin]||closes[last];
+  $('coinPrice').textContent=`${coin} ${eur(p,p>1000?0:2)}`;
+  const st=$('coinState');st.innerHTML='';
+  const inPos=holdings()[coin]>0;const pill=document.createElement('span');pill.className='pill '+(inPos?'in':'out');pill.textContent=inPos?'bot holds':'bot in cash';
+  const gap=avg?(avg/p-1):null;
+  st.append(pill,document.createTextNode(avg?(p>=avg?` · ${pct(p/avg-1)} above its 200-day avg`:` · needs ${pct(gap)} to reach its 200-day avg`):''));
+  draw(cs,closes,p);
+}
+function draw(cs,closes,p){
+  const cv=$('chart'),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
+  cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);g.clearRect(0,0,W,H);
+  const css=getComputedStyle(document.documentElement),col=k=>css.getPropertyValue(k).trim();
+  const show=Math.min(120,cs.length),from=cs.length-show;
+  const px=closes.slice(from).concat([p]);const av=[];for(let i=from;i<cs.length;i++)av.push(sma(closes,i));
+  const all=px.concat(av.filter(v=>v!=null));const lo=Math.min(...all),hi=Math.max(...all),pad=(hi-lo)*.08||1;
+  const L=8,R=W-58,T=8,B=H-22;const x=i=>L+(R-L)*i/(px.length-1),y=v=>B-(B-T)*(v-lo+pad)/(hi-lo+2*pad);
+  g.strokeStyle=col('--line');g.lineWidth=1;g.fillStyle=col('--muted');g.font='11px ui-monospace,monospace';
+  for(let k=0;k<=3;k++){const v=lo-pad+(hi-lo+2*pad)*k/3,yy=y(v);g.beginPath();g.moveTo(L,yy);g.lineTo(R,yy);g.stroke();g.fillText(Math.round(v).toLocaleString('en-IE'),R+6,yy+4)}
+  g.fillText(cs[from].t.slice(5),L,H-6);g.fillText('now',R-20,H-6);
+  g.strokeStyle=col('--sma');g.lineWidth=2;g.beginPath();let st=false;av.forEach((v,i)=>{if(v==null)return;st?g.lineTo(x(i),y(v)):g.moveTo(x(i),y(v));st=true});g.stroke();
+  g.strokeStyle=col('--accent');g.lineWidth=2;g.beginPath();px.forEach((v,i)=>i?g.lineTo(x(i),y(v)):g.moveTo(x(i),y(v)));g.stroke();
+  g.fillStyle=col('--accent');g.beginPath();g.arc(x(px.length-1),y(p),4,0,7);g.fill();
+  for(const t of (state&&state.trade_log)||[]){if(t.asset!==coin)continue;const d=t.at_utc.slice(0,10);const i=cs.findIndex(c=>c.t===d)-from;if(i<0)continue;
+    const buy=t.side==='buy',yy=y(+t.price_eur),xx=x(i);g.fillStyle=col(buy?'--up':'--down');g.beginPath();
+    if(buy){g.moveTo(xx,yy+4);g.lineTo(xx-6,yy+14);g.lineTo(xx+6,yy+14)}else{g.moveTo(xx,yy-4);g.lineTo(xx-6,yy-14);g.lineTo(xx+6,yy-14)}g.fill()}
+}
+function renderTrades(){
+  const log=((state&&state.trade_log)||[]).slice().reverse();if(!log.length)return;
+  const tb=$('trades');tb.innerHTML='';
+  for(const t of log.slice(0,50)){const tr=document.createElement('tr');
+    for(const v of [t.at_utc.replace('T',' ').slice(0,16),t.asset,t.side,eur(t.gross_eur),eur(t.price_eur,0)]){const td=document.createElement('td');td.textContent=v;if(v===t.side)td.className=t.side==='buy'?'pos':'neg';tr.append(td)}
+    tb.append(tr)}
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{coin=b.dataset.coin;document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderCoin()});
+addEventListener('resize',renderCoin);
+(async()=>{
+  await loadState();
+  try{await loadCandles()}catch{$('liveTxt').textContent='Could not load Coinbase history.'}
+  await tick();setInterval(tick,15000);setInterval(async()=>{await loadState();render()},300000);
+})();
+</script>
+</body>
+</html>
