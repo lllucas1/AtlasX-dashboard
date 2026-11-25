@@ -56,6 +56,7 @@ h1 small{display:block;font-size:12px;font-weight:500;color:var(--muted);letter-
 .state{font-size:13px;color:var(--muted);margin-bottom:8px;min-height:20px}
 .pill{font:700 11px var(--mono);padding:2px 9px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
 .pill.in{background:#3ee6a022;color:var(--up)}.pill.out{background:#9aa8c322;color:var(--muted)}
+#race3d canvas{width:100%;height:300px;display:block;border-radius:14px;touch-action:pan-y;cursor:grab}
 #chart{height:340px;width:100%;border-radius:14px;overflow:hidden}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
 .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
@@ -106,16 +107,19 @@ th{color:var(--muted);font-weight:500;font-size:12px}
   <section class="card" aria-label="Live chart">
     <div class="bar">
       <div class="seg" role="group" aria-label="Coin" id="coins"><button type="button" data-coin="BTC" aria-pressed="true">BTC</button><button type="button" data-coin="ETH" aria-pressed="false">ETH</button></div>
-      <div class="seg" role="group" aria-label="Timeframe" id="tfs"><button type="button" data-g="900" aria-pressed="false">15m</button><button type="button" data-g="3600" aria-pressed="false">1h</button><button type="button" data-g="21600" aria-pressed="false">6h</button><button type="button" data-g="86400" aria-pressed="true">1D</button></div>
+      <div class="seg" role="group" aria-label="Timeframe" id="tfs"><button type="button" data-g="60" aria-pressed="false">1m</button><button type="button" data-g="300" aria-pressed="false">5m</button><button type="button" data-g="900" aria-pressed="false">15m</button><button type="button" data-g="3600" aria-pressed="false">1h</button><button type="button" data-g="21600" aria-pressed="false">6h</button><button type="button" data-g="86400" aria-pressed="true">1D</button></div>
     </div>
     <div class="price" id="price">—</div>
     <div class="state" id="coinState"></div>
     <div id="chart"></div>
-    <div class="legend"><span><i style="background:var(--up)"></i>Up candle</span><span><i style="background:var(--down)"></i>Down candle</span><span><i style="background:var(--sma)"></i>Trend line (1D view)</span><span>▲ bot bought · ▼ bot sold</span></div>
+    <div class="legend"><span><i style="background:var(--up)"></i>Up candle</span><span><i style="background:var(--down)"></i>Down candle</span><span><i style="background:var(--sma)"></i>Trend line (1D view)</span><span>▲ bot bought · ▼ bot sold</span><span>The latest candle moves tick by tick, live.</span></div>
   </section>
 
   <section class="card" aria-label="Strategy race">
-    <div class="bar"><div><b>Strategy race</b><div class="sub">9 practice bots, €500 each, same live prices, real fees. Tap one for details.</div></div><div class="sub" id="raceTime"></div></div>
+    <div class="bar"><div><b>Strategy race</b><div class="sub">9 practice bots, €500 each, same live prices, real fees. Tap one for details.</div></div>
+      <div class="seg" role="group" aria-label="Race view" id="rview"><button type="button" data-v="list" aria-pressed="true">List</button><button type="button" data-v="3d" aria-pressed="false">3D</button></div></div>
+    <div class="sub" id="raceTime" style="margin:-4px 0 8px"></div>
+    <div id="race3d" hidden><canvas id="race3dc" aria-label="3D bar chart of the strategy race: taller bar means more money" role="img"></canvas><div class="note">Drag to spin. Taller and greener means more money; red means below the €500 start.</div></div>
     <div id="race"><div class="note">The race starts on the bot's next run. The leaderboard appears here.</div></div>
   </section>
 
@@ -198,6 +202,7 @@ async function drawChart(){
   smaS.setData(gran===86400?smaLine(cs):[]);
   const marks=((state&&state.trade_log)||[]).filter(t=>t.asset===coin).map(t=>{const ts=Math.floor(Date.parse(t.at_utc)/1000);const bar=[...cs].reverse().find(c=>c.time<=ts);return bar&&{time:bar.time,position:t.side==='buy'?'belowBar':'aboveBar',color:t.side==='buy'?'#3ee6a0':'#ff6b7d',shape:t.side==='buy'?'arrowUp':'arrowDown',text:t.side==='buy'?'bought':'sold'}}).filter(Boolean);
   candleS.setMarkers(marks);
+  chart.timeScale().applyOptions({secondsVisible:false,timeVisible:gran<86400});
   chart.timeScale().setVisibleLogicalRange({from:cs.length-(gran===86400?140:120),to:cs.length+3});
   renderCoinState();
 }
@@ -214,7 +219,10 @@ function onPrice(c,p){
   const prev=live[c];live[c]=p;lastTick=Date.now();
   $('dot').className='dot on';$('liveTxt').textContent='Live';
   if(c===coin){const el=$('price');el.textContent=`${c} ${eur(p,p>100?0:2)}`;if(prev){el.classList.toggle('up',p>prev);el.classList.toggle('down',p<prev)}
-    if(lastBar&&candleS){lastBar={...lastBar,close:p,high:Math.max(lastBar.high,p),low:Math.min(lastBar.low,p)};candleS.update(lastBar)}}
+    if(lastBar&&candleS){const bucket=Math.floor(Date.now()/1000/gran)*gran;
+      lastBar=bucket>lastBar.time?{time:bucket,open:lastBar.close,high:Math.max(lastBar.close,p),low:Math.min(lastBar.close,p),close:p}
+                                 :{...lastBar,close:p,high:Math.max(lastBar.high,p),low:Math.min(lastBar.low,p)};
+      candleS.update(lastBar)}}
   renderMoney();
 }
 function stream(){
@@ -239,6 +247,7 @@ function renderMoney(){if(queued)return;queued=true;requestAnimationFrame(()=>{q
   renderCoinState();
 })}
 function renderRace(){
+  if(!$('race3d').hidden)race3d();
   const rows=race&&race.rows&&[...race.rows].sort((x,y)=>y.value_eur-x.value_eur);if(!rows||!rows.length)return;
   $('raceTime').textContent='updated '+(race.saved_at_utc||'').replace('T',' ').slice(0,16)+' UTC';
   const box=$('race');box.innerHTML='';const vals=rows.map(r=>+r.value_eur),max=Math.max(...vals),min=Math.min(...vals);
@@ -263,6 +272,34 @@ function renderTrades(){
     for(const [v,cls] of [[t.at_utc.replace('T',' ').slice(0,16)],[t.asset],[t.side==='buy'?'bought':'sold',t.side==='buy'?'pos':'neg'],[eur(t.gross_eur)],[eur(t.price_eur,0)]]){const td=document.createElement('td');td.textContent=v;if(cls)td.className=cls;tr.append(td)}
     tb.append(tr)}
 }
+/* 3D race: one bar per bot, height = money, spins slowly, drag to rotate */
+let r3=null;
+function race3d(){
+  const rows=race&&race.rows;if(!rows||!rows.length||!window.THREE)return;
+  const cv=$('race3dc');
+  if(!r3){let R;try{R=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true})}catch{return}
+    R.setPixelRatio(Math.min(devicePixelRatio,2));const S=new THREE.Scene(),C=new THREE.PerspectiveCamera(40,1,.1,100);
+    S.add(new THREE.AmbientLight(0xffffff,.55));const L=new THREE.DirectionalLight(0xffffff,.9);L.position.set(3,6,4);S.add(L);
+    const grid=new THREE.GridHelper(9,18,0x2c4a78,0x1a2c4a);grid.position.y=-.01;S.add(grid);
+    const G=new THREE.Group();S.add(G);r3={R,S,C,G,spin:0,drag:null};
+    cv.addEventListener('pointerdown',e=>{r3.drag=e.clientX;cv.setPointerCapture(e.pointerId)});
+    cv.addEventListener('pointermove',e=>{if(r3.drag!==null){r3.spin+=(e.clientX-r3.drag)*.01;r3.drag=e.clientX}});
+    cv.addEventListener('pointerup',()=>r3.drag=null);
+    (function loop(){if(!$('race3d').hidden&&!document.hidden){const w=cv.clientWidth,h=cv.clientHeight;if(cv.width!==Math.floor(w*r3.R.getPixelRatio())){r3.R.setSize(w,h,false);r3.C.aspect=w/h;r3.C.updateProjectionMatrix()}
+      if(r3.drag===null&&!RM)r3.spin+=.003;r3.C.position.set(Math.sin(r3.spin)*10,5.4,Math.cos(r3.spin)*10);r3.C.lookAt(0,1,0);r3.R.render(r3.S,r3.C)}requestAnimationFrame(loop)})();}
+  const G=r3.G;while(G.children.length)G.remove(G.children[0]);
+  const vals=rows.map(r=>+r.value_eur),lo=Math.min(...vals,500)-5,hi=Math.max(...vals,500)+5;
+  rows.forEach((r,i)=>{
+    const a=(i/rows.length)*Math.PI*2,x=Math.sin(a)*3,z=Math.cos(a)*3,h=.3+2.7*(+r.value_eur-lo)/(hi-lo),up=+r.value_eur>=500;
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(.55,h,.55),new THREE.MeshStandardMaterial({color:up?0x3ee6a0:0xff6b7d,emissive:up?0x0b3a28:0x3a0b14,roughness:.35,metalness:.2}));
+    bar.position.set(x,h/2,z);G.add(bar);
+    const c=document.createElement('canvas');c.width=256;c.height=96;const g=c.getContext('2d');g.fillStyle='#f2f5fc';g.font='600 30px -apple-system,Segoe UI,sans-serif';g.textAlign='center';g.fillText(r.name,128,38);
+    g.fillStyle=up?'#3ee6a0':'#ff6b7d';g.font='700 30px ui-monospace,Menlo,monospace';g.fillText('€'+(+r.value_eur).toFixed(0),128,80);
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));sp.scale.set(1.6,.6,1);sp.position.set(x,h+.45,z);G.add(sp);
+  });
+}
+seg('rview','v',v=>{$('race3d').hidden=v!=='3d';$('race').hidden=v==='3d';if(v==='3d')race3d()});
+
 function seg(id,attr,fn){document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>{document.querySelectorAll(`#${id} button`).forEach(x=>x.setAttribute('aria-pressed',String(x===b)));fn(b.dataset[attr])})}
 seg('coins','coin',c=>{coin=c;const p=live[c];if(p)$('price').textContent=`${c} ${eur(p,p>100?0:2)}`;if(chart)drawChart()});
 seg('tfs','g',g=>{gran=+g;if(chart)drawChart()});
