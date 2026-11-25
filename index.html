@@ -57,6 +57,7 @@ h1 small{display:block;font-size:12px;font-weight:500;color:var(--muted);letter-
 .pill{font:700 11px var(--mono);padding:2px 9px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em;margin-right:6px}
 .pill.in{background:#3ee6a022;color:var(--up)}.pill.out{background:#9aa8c322;color:var(--muted)}
 #race3d canvas{width:100%;height:300px;display:block;border-radius:14px;touch-action:pan-y;cursor:grab}
+#chart3d canvas{width:100%;height:340px;display:block;border-radius:14px;touch-action:pan-y;cursor:grab}
 #chart{height:340px;width:100%;border-radius:14px;overflow:hidden}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
 .legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
@@ -107,11 +108,13 @@ th{color:var(--muted);font-weight:500;font-size:12px}
   <section class="card" aria-label="Live chart">
     <div class="bar">
       <div class="seg" role="group" aria-label="Coin" id="coins"><button type="button" data-coin="BTC" aria-pressed="true">BTC</button><button type="button" data-coin="ETH" aria-pressed="false">ETH</button></div>
-      <div class="seg" role="group" aria-label="Timeframe" id="tfs"><button type="button" data-g="60" aria-pressed="false">1m</button><button type="button" data-g="300" aria-pressed="false">5m</button><button type="button" data-g="900" aria-pressed="false">15m</button><button type="button" data-g="3600" aria-pressed="false">1h</button><button type="button" data-g="21600" aria-pressed="false">6h</button><button type="button" data-g="86400" aria-pressed="true">1D</button></div>
+      <div class="seg" role="group" aria-label="Timeframe" id="tfs"><button type="button" data-g="1" aria-pressed="false">1s</button><button type="button" data-g="60" aria-pressed="false">1m</button><button type="button" data-g="300" aria-pressed="false">5m</button><button type="button" data-g="900" aria-pressed="false">15m</button><button type="button" data-g="3600" aria-pressed="false">1h</button><button type="button" data-g="21600" aria-pressed="false">6h</button><button type="button" data-g="86400" aria-pressed="true">1D</button></div>
     </div>
     <div class="price" id="price">—</div>
     <div class="state" id="coinState"></div>
     <div id="chart"></div>
+    <div id="chart3d" hidden><canvas id="chart3dc" aria-label="3D candle chart: green boxes went up, red went down" role="img"></canvas></div>
+    <div class="bar" style="margin:8px 0 0"><div class="seg" role="group" aria-label="Chart view" id="cview"><button type="button" data-v="2d" aria-pressed="true">2D</button><button type="button" data-v="3d" aria-pressed="false">3D</button></div><span class="note" id="tfNote"></span></div>
     <div class="legend"><span><i style="background:var(--up)"></i>Up candle</span><span><i style="background:var(--down)"></i>Down candle</span><span><i style="background:var(--sma)"></i>Trend line (1D view)</span><span>▲ bot bought · ▼ bot sold</span><span>The latest candle moves tick by tick, live.</span></div>
   </section>
 
@@ -134,7 +137,8 @@ th{color:var(--muted);font-weight:500;font-size:12px}
 <script>
 const API='https://api.exchange.coinbase.com/products/', COINS=['BTC','ETH'], START=500, START_DAY='2026-11-25';
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
-let state=null, race=null, daily={}, live={}, coin='BTC', gran=86400, chart, candleS, smaS, lastBar=null;
+let state=null, race=null, daily={}, live={}, coin='BTC', gran=86400, chart, candleS, smaS, lastBar=null, shownCandles=[];
+const secBars={BTC:[],ETH:[]};  // 1-second candles, built in the browser from live ticks (Coinbase has no 1s history)
 const $=id=>document.getElementById(id);
 const eur=(v,d=2)=>'€'+Number(v).toLocaleString('en-IE',{minimumFractionDigits:d,maximumFractionDigits:d});
 const pct=v=>(v>=0?'+':'')+(v*100).toFixed(1)+'%';
@@ -197,12 +201,20 @@ function makeChart(){
   smaS=chart.addLineSeries({color:'#ffb547',lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
 }
 async function drawChart(){
-  let cs;try{cs=await candles(coin,gran)}catch{$('coinState').textContent='Could not load the chart from Coinbase. Retrying shortly.';return}
+  let cs;
+  if(gran===1){
+    cs=secBars[coin].slice();if(!cs.length&&live[coin]){const t=Math.floor(Date.now()/1000),p=live[coin];cs=[{time:t,open:p,high:p,low:p,close:p}]}
+    $('tfNote').textContent='1s candles build live from this moment on (Coinbase keeps no 1-second history).';
+  }else{
+    $('tfNote').textContent='';
+    try{cs=await candles(coin,gran)}catch{$('coinState').textContent='Could not load the chart from Coinbase. Retrying shortly.';return}
+  }
+  shownCandles=cs;if(!$('chart3d').hidden)chart3d();
   candleS.setData(cs);lastBar=cs[cs.length-1];
   smaS.setData(gran===86400?smaLine(cs):[]);
   const marks=((state&&state.trade_log)||[]).filter(t=>t.asset===coin).map(t=>{const ts=Math.floor(Date.parse(t.at_utc)/1000);const bar=[...cs].reverse().find(c=>c.time<=ts);return bar&&{time:bar.time,position:t.side==='buy'?'belowBar':'aboveBar',color:t.side==='buy'?'#3ee6a0':'#ff6b7d',shape:t.side==='buy'?'arrowUp':'arrowDown',text:t.side==='buy'?'bought':'sold'}}).filter(Boolean);
   candleS.setMarkers(marks);
-  chart.timeScale().applyOptions({secondsVisible:false,timeVisible:gran<86400});
+  chart.timeScale().applyOptions({secondsVisible:gran<60,timeVisible:gran<86400});
   chart.timeScale().setVisibleLogicalRange({from:cs.length-(gran===86400?140:120),to:cs.length+3});
   renderCoinState();
 }
@@ -217,12 +229,17 @@ function renderCoinState(){
 let lastTick=0;
 function onPrice(c,p){
   const prev=live[c];live[c]=p;lastTick=Date.now();
+  const sec=Math.floor(lastTick/1000),sb=secBars[c],last=sb[sb.length-1];
+  if(last&&last.time===sec){last.close=p;last.high=Math.max(last.high,p);last.low=Math.min(last.low,p)}
+  else{sb.push({time:sec,open:last?last.close:p,high:Math.max(last?last.close:p,p),low:Math.min(last?last.close:p,p),close:p});if(sb.length>900)sb.shift()}
   $('dot').className='dot on';$('liveTxt').textContent='Live';
   if(c===coin){const el=$('price');el.textContent=`${c} ${eur(p,p>100?0:2)}`;if(prev){el.classList.toggle('up',p>prev);el.classList.toggle('down',p<prev)}
-    if(lastBar&&candleS){const bucket=Math.floor(Date.now()/1000/gran)*gran;
+    if(gran===1&&candleS){candleS.update({...secBars[c][secBars[c].length-1]})}
+    else if(lastBar&&candleS){const bucket=Math.floor(Date.now()/1000/gran)*gran;
       lastBar=bucket>lastBar.time?{time:bucket,open:lastBar.close,high:Math.max(lastBar.close,p),low:Math.min(lastBar.close,p),close:p}
                                  :{...lastBar,close:p,high:Math.max(lastBar.high,p),low:Math.min(lastBar.low,p)};
       candleS.update(lastBar)}}
+  if(c===coin&&!$('chart3d').hidden&&Date.now()-(window._c3t||0)>2000){window._c3t=Date.now();if(gran===1)shownCandles=secBars[coin];chart3d()}
   renderMoney();
 }
 function stream(){
@@ -298,6 +315,29 @@ function race3d(){
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true}));sp.scale.set(1.6,.6,1);sp.position.set(x,h+.45,z);G.add(sp);
   });
 }
+/* 3D candles: last 80 candles of the current view as boxes, drag to spin */
+let c3=null;
+function chart3d(){
+  const cs=shownCandles.slice(-80);if(!cs.length||!window.THREE)return;
+  const cv=$('chart3dc');
+  if(!c3){let R;try{R=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true})}catch{return}
+    R.setPixelRatio(Math.min(devicePixelRatio,2));const S=new THREE.Scene(),C=new THREE.PerspectiveCamera(38,1,.1,200);
+    S.add(new THREE.AmbientLight(0xffffff,.6));const L=new THREE.DirectionalLight(0xffffff,.8);L.position.set(-4,8,6);S.add(L);
+    const grid=new THREE.GridHelper(14,14,0x2c4a78,0x1a2c4a);S.add(grid);const G=new THREE.Group();S.add(G);
+    c3={R,S,C,G,spin:-.5,drag:null};
+    cv.addEventListener('pointerdown',e=>{c3.drag=e.clientX;cv.setPointerCapture(e.pointerId)});
+    cv.addEventListener('pointermove',e=>{if(c3.drag!==null){c3.spin+=(e.clientX-c3.drag)*.008;c3.drag=e.clientX}});
+    cv.addEventListener('pointerup',()=>c3.drag=null);
+    (function loop(){if(!$('chart3d').hidden&&!document.hidden){const w=cv.clientWidth,h=cv.clientHeight;if(cv.width!==Math.floor(w*c3.R.getPixelRatio())){c3.R.setSize(w,h,false);c3.C.aspect=w/h;c3.C.updateProjectionMatrix()}
+      if(c3.drag===null&&!RM)c3.spin+=.0015;c3.C.position.set(Math.sin(c3.spin)*15,6.5,Math.cos(c3.spin)*15);c3.C.lookAt(0,2.2,0);c3.R.render(c3.S,c3.C)}requestAnimationFrame(loop)})();}
+  const G=c3.G;while(G.children.length){const m=G.children.pop();m.geometry&&m.geometry.dispose()}
+  const lo=Math.min(...cs.map(c=>c.low)),hi=Math.max(...cs.map(c=>c.high)),y=v=>(v-lo)/((hi-lo)||1)*5,w=11/cs.length;
+  const up=new THREE.MeshStandardMaterial({color:0x3ee6a0,emissive:0x0b3a28,roughness:.4}),dn=new THREE.MeshStandardMaterial({color:0xff6b7d,emissive:0x3a0b14,roughness:.4});
+  cs.forEach((c,i)=>{const x=-5.5+(i+.5)*w,m=c.close>=c.open?up:dn,b0=y(Math.min(c.open,c.close)),b1=Math.max(y(Math.max(c.open,c.close)),b0+.03);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(w*.7,b1-b0,w*.7),m);body.position.set(x,(b0+b1)/2,0);G.add(body);
+    const wick=new THREE.Mesh(new THREE.BoxGeometry(w*.12,Math.max(y(c.high)-y(c.low),.02),w*.12),m);wick.position.set(x,(y(c.high)+y(c.low))/2,0);G.add(wick)});
+}
+seg('cview','v',v=>{$('chart3d').hidden=v!=='3d';$('chart').style.display=v==='3d'?'none':'';if(v==='3d')chart3d()});
 seg('rview','v',v=>{$('race3d').hidden=v!=='3d';$('race').hidden=v==='3d';if(v==='3d')race3d()});
 
 function seg(id,attr,fn){document.querySelectorAll(`#${id} button`).forEach(b=>b.onclick=()=>{document.querySelectorAll(`#${id} button`).forEach(x=>x.setAttribute('aria-pressed',String(x===b)));fn(b.dataset[attr])})}
