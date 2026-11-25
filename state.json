@@ -1,0 +1,22 @@
+{
+  "cash": "500",
+  "holdings": {
+    "BTC": "0",
+    "ETH": "0"
+  },
+  "high_water_mark": "500",
+  "halted": false,
+  "liquidation_after": {},
+  "last_rebalance_month": null,
+  "pending": [],
+  "trade_log": [],
+  "history": [
+    {
+      "date": "2026-11-25",
+      "equity_eur": 500.0,
+      "btc_eur": 54789.65,
+      "eth_eur": 1533.53
+    }
+  ],
+  "saved_at_utc": "2026-11-25T22:28:16+00:00"
+}
