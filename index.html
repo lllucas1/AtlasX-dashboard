@@ -53,19 +53,24 @@ th{color:var(--muted);font-weight:500;font-size:12px}
 <body>
 <div class="wrap">
   <header>
-    <h1>AtlasX paper bot</h1>
+    <h1>AtlasX practice bot</h1>
     <div class="live"><span class="dot" id="dot"></span><span id="liveTxt">Connecting to Coinbase…</span></div>
   </header>
 
   <section class="card" aria-label="Portfolio">
-    <div class="sub">Paper portfolio value, live</div>
+    <div class="sub">Practice money (fake, nothing real at risk), worth right now</div>
     <div class="big" id="value">—</div>
     <div class="sub" id="since">—</div>
     <div class="row">
-      <div class="kv"><span>Holding</span><b id="holding">—</b></div>
-      <div class="kv"><span>50/50 hold</span><b id="hold">—</b></div>
-      <div class="kv"><span>Next check</span><b id="next">—</b></div>
+      <div class="kv"><span>Right now in</span><b id="holding">—</b></div>
+      <div class="kv"><span>If you'd just bought &amp; held</span><b id="hold">—</b></div>
+      <div class="kv"><span>Next trade check</span><b id="next">—</b></div>
     </div>
+  </section>
+
+  <section class="card" aria-label="How it works">
+    <div class="sub" style="margin-bottom:4px">How it works, in one line</div>
+    <div>The bot owns a coin only while its price is above the orange <b>trend line</b> (its average price over the last 200 days). Below the line, it sits in cash and waits. It checks once a week, on Tuesdays.</div>
   </section>
 
   <section class="card" aria-label="Chart">
@@ -75,15 +80,15 @@ th{color:var(--muted);font-weight:500;font-size:12px}
     </div>
     <div class="coinline"><span id="coinPrice">—</span><span id="coinState"></span></div>
     <canvas id="chart" aria-label="Price chart with 200-day average and trades" role="img"></canvas>
-    <div class="legend"><span><i style="background:var(--accent)"></i>Price (EUR)</span><span><i style="background:var(--sma)"></i>200-day average</span><span>▲ paper buy · ▼ paper sell</span></div>
+    <div class="legend"><span><i style="background:var(--accent)"></i>Price (EUR)</span><span><i style="background:var(--sma)"></i>Trend line</span><span>▲ bot bought · ▼ bot sold</span></div>
   </section>
 
   <section class="card" aria-label="Trades">
-    <div class="sub" style="margin-bottom:6px">Paper trades</div>
-    <div class="tbl"><table><thead><tr><th>Date (UTC)</th><th>Coin</th><th>Side</th><th>EUR</th><th>Price</th></tr></thead><tbody id="trades"><tr><td colspan="5" class="note">No paper trades yet. The bot holds cash until a coin closes above its 200-day average on a Monday.</td></tr></tbody></table></div>
+    <div class="sub" style="margin-bottom:6px">Practice trades</div>
+    <div class="tbl"><table><thead><tr><th>Date (UTC)</th><th>Coin</th><th>Side</th><th>EUR</th><th>Price</th></tr></thead><tbody id="trades"><tr><td colspan="5" class="note">No trades yet. The bot is waiting for BTC or ETH to start going up.</td></tr></tbody></table></div>
   </section>
 
-  <p class="note" id="foot">Paper money only. No real orders. Prices update live from Coinbase every 15 seconds; the bot itself decides trades at its Tuesday 00:15 UTC check and its daily run, and this page shows its saved state from <span id="stateTime">—</span>.</p>
+  <p class="note" id="foot">Fake practice money only, no real orders. Prices update live every 15 seconds. The bot's own data was last saved <span id="stateTime">—</span>.</p>
 </div>
 
 <script>
@@ -140,9 +145,9 @@ function renderCoin(){
   const p=live[coin]||closes[last];
   $('coinPrice').textContent=`${coin} ${eur(p,p>1000?0:2)}`;
   const st=$('coinState');st.innerHTML='';
-  const inPos=holdings()[coin]>0;const pill=document.createElement('span');pill.className='pill '+(inPos?'in':'out');pill.textContent=inPos?'bot holds':'bot in cash';
+  const inPos=holdings()[coin]>0;const pill=document.createElement('span');pill.className='pill '+(inPos?'in':'out');pill.textContent=inPos?'bot owns it':'bot is waiting';
   const gap=avg?(avg/p-1):null;
-  st.append(pill,document.createTextNode(avg?(p>=avg?` · ${pct(p/avg-1)} above its 200-day avg`:` · needs ${pct(gap)} to reach its 200-day avg`):''));
+  st.append(pill,document.createTextNode(avg?(p>=avg?` · going up: ${pct(p/avg-1)} above the trend line`:` · the bot buys if ${coin} rises about ${pct(gap).slice(1)} (to the trend line)`):''));
   draw(cs,closes,p);
 }
 function draw(cs,closes,p){
