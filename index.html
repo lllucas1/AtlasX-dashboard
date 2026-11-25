@@ -138,7 +138,7 @@ th{color:var(--muted);font-weight:500;font-size:12px}
 const API='https://api.exchange.coinbase.com/products/', COINS=['BTC','ETH'], START=500, START_DAY='2026-11-25';
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 let state=null, race=null, daily={}, live={}, coin='BTC', gran=86400, chart, candleS, smaS, lastBar=null, shownCandles=[];
-const secBars={BTC:[],ETH:[]};  // 1-second candles, built in the browser from live ticks (Coinbase has no 1s history)
+const secBars={BTC:[],ETH:[]};  // 1-second candles from recent trades and live ticks
 const $=id=>document.getElementById(id);
 const eur=(v,d=2)=>'€'+Number(v).toLocaleString('en-IE',{minimumFractionDigits:d,maximumFractionDigits:d});
 const pct=v=>(v>=0?'+':'')+(v*100).toFixed(1)+'%';
@@ -204,7 +204,7 @@ async function drawChart(){
   let cs;
   if(gran===1){
     cs=secBars[coin].slice();if(!cs.length&&live[coin]){const t=Math.floor(Date.now()/1000),p=live[coin];cs=[{time:t,open:p,high:p,low:p,close:p}]}
-    $('tfNote').textContent='1s candles build live from this moment on (Coinbase keeps no 1-second history).';
+    $('tfNote').textContent='1-second candles from the last hour of Coinbase trades, then live.';
   }else{
     $('tfNote').textContent='';
     try{cs=await candles(coin,gran)}catch{$('coinState').textContent='Could not load the chart from Coinbase. Retrying shortly.';return}
@@ -223,6 +223,21 @@ function renderCoinState(){
   const line=smaLine(cs).at(-1)?.value;const own=holdings()[coin]>0;
   const st=$('coinState');st.innerHTML='';const pill=document.createElement('span');pill.className='pill '+(own?'in':'out');pill.textContent=own?'bot owns it':'bot is waiting';
   st.append(pill,document.createTextNode(line?(p>=line?`going up: ${pct(p/line-1)} above the trend line`:`the bot buys if ${coin} rises about ${pct(line/p-1).slice(1)} (to the trend line)`):''));
+}
+
+async function seedSecBars(c){
+  try{
+    const trades=await getJSON(`${API}${c}-EUR/trades?limit=1000`), bars=new Map();
+    for(const trade of trades.reverse()){
+      const time=Math.floor(Date.parse(trade.time)/1000), p=+trade.price;
+      if(!Number.isFinite(time)||!Number.isFinite(p)||p<=0)continue;
+      const bar=bars.get(time);
+      if(bar){bar.high=Math.max(bar.high,p);bar.low=Math.min(bar.low,p);bar.close=p}
+      else bars.set(time,{time,open:p,high:p,low:p,close:p});
+    }
+    for(const bar of secBars[c])bars.set(bar.time,bar);
+    secBars[c]=[...bars.values()].sort((a,b)=>a.time-b.time).slice(-900);
+  }catch{}
 }
 
 /* Live prices: Coinbase WebSocket stream, with polling as a fallback */
@@ -348,8 +363,9 @@ seg('tfs','g',g=>{gran=+g;if(chart)drawChart()});
   if(window.LightweightCharts)makeChart();else $('coinState').textContent='Chart library could not load.';
   await loadSaved();
   for(const c of COINS){try{daily[c]=await candles(c,86400)}catch{}}
+  await Promise.all(COINS.map(seedSecBars));
   if(chart)await drawChart();
-  for(const c of COINS){const cs=daily[c];if(cs&&!live[c])onPrice(c,cs.at(-1).close)}
+  for(const c of COINS){const cs=daily[c],sb=secBars[c];if(!live[c]&&(sb.length||cs))onPrice(c,sb.length?sb.at(-1).close:cs.at(-1).close)}
   stream();
   setInterval(loadSaved,300000);setInterval(()=>{if(chart)drawChart()},180000);
 })();
