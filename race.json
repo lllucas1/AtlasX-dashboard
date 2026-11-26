@@ -3,9 +3,9 @@
     {
       "id": "R0",
       "name": "Just hold",
-      "value_eur": 501.65,
-      "change_pct": 0.33,
-      "shadow_value_eur": 502.89,
+      "value_eur": 504.9,
+      "change_pct": 0.98,
+      "shadow_value_eur": 506.14,
       "trades": 2,
       "worst_drop_pct": 0.55,
       "stale_price": false,
@@ -15,9 +15,9 @@
     {
       "id": "R3",
       "name": "Golden cross",
-      "value_eur": 501.65,
-      "change_pct": 0.33,
-      "shadow_value_eur": 502.89,
+      "value_eur": 504.9,
+      "change_pct": 0.98,
+      "shadow_value_eur": 506.14,
       "trades": 2,
       "worst_drop_pct": 0.55,
       "stale_price": false,
@@ -121,5 +121,5 @@
       "rule": "Main bot rule, plus cash when unusually many coins move onto exchanges (added 26 Nov, Study 004)."
     }
   ],
-  "saved_at_utc": "2026-11-26T03:34:38+00:00"
+  "saved_at_utc": "2026-11-26T04:42:03+00:00"
 }
