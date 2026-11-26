@@ -1,6 +1,42 @@
 {
   "rows": [
     {
+      "id": "R0",
+      "name": "Just hold",
+      "value_eur": 504.9,
+      "change_pct": 0.98,
+      "shadow_value_eur": 506.14,
+      "trades": 2,
+      "worst_drop_pct": 0.55,
+      "stale_price": false,
+      "holding": "50% BTC, 50% ETH",
+      "rule": "Buys 50% BTC + 50% ETH once and never sells. The yardstick."
+    },
+    {
+      "id": "R3",
+      "name": "Golden cross",
+      "value_eur": 504.9,
+      "change_pct": 0.98,
+      "shadow_value_eur": 506.14,
+      "trades": 2,
+      "worst_drop_pct": 0.55,
+      "stale_price": false,
+      "holding": "50% BTC, 50% ETH",
+      "rule": "Owns a coin while its 50-day average is above its 200-day average."
+    },
+    {
+      "id": "R8",
+      "name": "Day trader",
+      "value_eur": 500.73,
+      "change_pct": 0.15,
+      "shadow_value_eur": 503.23,
+      "trades": 4,
+      "worst_drop_pct": 0.55,
+      "stale_price": false,
+      "holding": "100% cash",
+      "rule": "Day trader: buys in the evening if the coin rose that day, sells at midnight."
+    },
+    {
       "id": "R1",
       "name": "Main bot",
       "value_eur": 500.0,
@@ -8,6 +44,7 @@
       "shadow_value_eur": 500.0,
       "trades": 0,
       "worst_drop_pct": 0.0,
+      "stale_price": false,
       "holding": "100% cash",
       "rule": "The main bot: owns a coin while it is above its 200-day trend line. Checks Tuesdays."
     },
@@ -19,6 +56,7 @@
       "shadow_value_eur": 500.0,
       "trades": 0,
       "worst_drop_pct": 0.0,
+      "stale_price": false,
       "holding": "100% cash",
       "rule": "Like the main bot, but a faster 50-day line, checked daily."
     },
@@ -30,6 +68,7 @@
       "shadow_value_eur": 500.0,
       "trades": 0,
       "worst_drop_pct": 0.0,
+      "stale_price": false,
       "holding": "100% cash",
       "rule": "Every Tuesday holds the 3 strongest of 10 coins (last 28 days), only if they are in an uptrend."
     },
@@ -41,6 +80,7 @@
       "shadow_value_eur": 500.0,
       "trades": 0,
       "worst_drop_pct": 0.0,
+      "stale_price": false,
       "holding": "100% cash",
       "rule": "Holds BTC + ETH but less of them when prices swing wildly."
     },
@@ -52,6 +92,7 @@
       "shadow_value_eur": 500.0,
       "trades": 0,
       "worst_drop_pct": 0.0,
+      "stale_price": false,
       "holding": "100% cash",
       "rule": "Buys sharp short dips in an uptrend, sells after the bounce."
     },
@@ -63,6 +104,7 @@
       "shadow_value_eur": 500.0,
       "trades": 0,
       "worst_drop_pct": 0.0,
+      "stale_price": false,
       "holding": "100% cash",
       "rule": "Buys a 20-day high, sells a 10-day low."
     },
@@ -74,42 +116,10 @@
       "shadow_value_eur": 500.0,
       "trades": 0,
       "worst_drop_pct": 0.0,
+      "stale_price": false,
       "holding": "100% cash",
       "rule": "Main bot rule, plus cash when unusually many coins move onto exchanges (added 26 Nov, Study 004)."
-    },
-    {
-      "id": "R0",
-      "name": "Just hold",
-      "value_eur": 498.18,
-      "change_pct": -0.36,
-      "shadow_value_eur": 499.42,
-      "trades": 2,
-      "worst_drop_pct": 0.55,
-      "holding": "50% BTC, 50% ETH",
-      "rule": "Buys 50% BTC + 50% ETH once and never sells. The yardstick."
-    },
-    {
-      "id": "R3",
-      "name": "Golden cross",
-      "value_eur": 498.18,
-      "change_pct": -0.36,
-      "shadow_value_eur": 499.42,
-      "trades": 2,
-      "worst_drop_pct": 0.55,
-      "holding": "50% BTC, 50% ETH",
-      "rule": "Owns a coin while its 50-day average is above its 200-day average."
-    },
-    {
-      "id": "R8",
-      "name": "Day trader",
-      "value_eur": 498.18,
-      "change_pct": -0.36,
-      "shadow_value_eur": 499.42,
-      "trades": 2,
-      "worst_drop_pct": 0.55,
-      "holding": "50% BTC, 50% ETH",
-      "rule": "Day trader: buys in the evening if the coin rose that day, sells at midnight."
     }
   ],
-  "saved_at_utc": "2026-11-25T23:25:35+00:00"
+  "saved_at_utc": "2026-11-26T04:42:03+00:00"
 }
