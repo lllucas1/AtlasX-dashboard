@@ -138,6 +138,7 @@ th{color:var(--muted);font-weight:500;font-size:12px}
 const API='https://api.exchange.coinbase.com/products/', COINS=['BTC','ETH'], START=500, START_DAY='2026-11-25';
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 let state=null, race=null, daily={}, live={}, coin='BTC', gran=86400, chart, candleS, smaS, lastBar=null, shownCandles=[];
+let chartRequest=0, displayedCoin, displayedGran;
 const secBars={BTC:[],ETH:[]};  // 1-second candles from recent trades and live ticks
 const $=id=>document.getElementById(id);
 const eur=(v,d=2)=>'€'+Number(v).toLocaleString('en-IE',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -180,8 +181,11 @@ function animateValue(to){
 }
 
 async function loadSaved(){
-  try{state=await getJSON('state.json?'+Date.now());$('stateTime').textContent=(state.saved_at_utc||'').replace('T',' ').slice(0,16)+' UTC'}catch{state=null}
-  try{race=await getJSON('race.json?'+Date.now())}catch{race=null}
+  let failed=false;
+  try{state=await getJSON('state.json?'+Date.now())}catch{failed=true}
+  try{race=await getJSON('race.json?'+Date.now())}catch{failed=true}
+  $('stateTime').textContent=(state?(state.saved_at_utc||'').replace('T',' ').slice(0,16)+' UTC':'—')+
+    (failed?" (couldn't refresh, showing last saved)":'');
   renderRace();renderTrades();renderMoney();
 }
 async function candles(c,g){
@@ -189,7 +193,7 @@ async function candles(c,g){
   return rows.map(r=>({time:r[0],low:r[1],high:r[2],open:r[3],close:r[4]})).sort((a,b)=>a.time-b.time);
 }
 function holdings(){return state?{cash:+state.cash,BTC:+state.holdings.BTC,ETH:+state.holdings.ETH}:{cash:START,BTC:0,ETH:0}}
-function smaLine(cs){const out=[];let s=0;cs.forEach((c,i)=>{s+=c.close;if(i>=200)s-=cs[i-200].close;if(i>=199)out.push({time:c.time,value:s/200})});return out}
+function smaLine(cs){const today=Math.floor(Date.now()/86400000)*86400;cs=cs.filter(c=>c.time<today);const out=[];let s=0;cs.forEach((c,i)=>{s+=c.close;if(i>=200)s-=cs[i-200].close;if(i>=199)out.push({time:c.time,value:s/200})});return out}
 
 /* TradingView-style chart (their open-source lightweight-charts library) */
 function makeChart(){
@@ -201,28 +205,39 @@ function makeChart(){
   smaS=chart.addLineSeries({color:'#ffb547',lineWidth:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
 }
 async function drawChart(){
+  const request=++chartRequest,c=coin,g=gran;
+  const previousBar=lastBar;
   let cs;
-  if(gran===1){
-    cs=secBars[coin].slice();if(!cs.length&&live[coin]){const t=Math.floor(Date.now()/1000),p=live[coin];cs=[{time:t,open:p,high:p,low:p,close:p}]}
-    $('tfNote').textContent='1-second candles from the last hour of Coinbase trades, then live.';
-  }else{
-    $('tfNote').textContent='';
-    try{cs=await candles(coin,gran)}catch{$('coinState').textContent='Could not load the chart from Coinbase. Retrying shortly.';return}
+  if(g===1)cs=secBars[c].slice();
+  else{
+    try{cs=await candles(c,g)}catch{
+      if(request===chartRequest)$('coinState').textContent='Could not load the chart from Coinbase. Retrying shortly.';
+      return;
+    }
   }
-  shownCandles=cs;if(!$('chart3d').hidden)chart3d();
-  candleS.setData(cs);lastBar=cs[cs.length-1];
-  smaS.setData(gran===86400?smaLine(cs):[]);
-  const marks=((state&&state.trade_log)||[]).filter(t=>t.asset===coin).map(t=>{const ts=Math.floor(Date.parse(t.at_utc)/1000);const bar=[...cs].reverse().find(c=>c.time<=ts);return bar&&{time:bar.time,position:t.side==='buy'?'belowBar':'aboveBar',color:t.side==='buy'?'#3ee6a0':'#ff6b7d',shape:t.side==='buy'?'arrowUp':'arrowDown',text:t.side==='buy'?'bought':'sold'}}).filter(Boolean);
+  if(request!==chartRequest||c!==coin||g!==gran)return;
+  if(g!==1&&c===displayedCoin&&g===displayedGran&&lastBar&&lastBar!==previousBar){
+    const bar=cs.at(-1);
+    if(!bar||lastBar.time>bar.time)cs.push(lastBar);
+    else if(lastBar.time===bar.time)cs[cs.length-1]={...bar,close:lastBar.close,
+      high:Math.max(bar.high,lastBar.high),low:Math.min(bar.low,lastBar.low)};
+  }
+  displayedCoin=c;displayedGran=g;shownCandles=cs;lastBar=cs.at(-1);
+  if(g===1)renderSecNote(c);else $('tfNote').textContent='';
+  candleS.setData(cs);
+  if(!$('chart3d').hidden)chart3d();
+  smaS.setData(g===86400?smaLine(cs):[]);
+  const marks=((state&&state.trade_log)||[]).filter(t=>t.asset===c).map(t=>{const ts=Math.floor(Date.parse(t.at_utc)/1000);const bar=[...cs].reverse().find(c=>c.time<=ts);return bar&&{time:bar.time,position:t.side==='buy'?'belowBar':'aboveBar',color:t.side==='buy'?'#3ee6a0':'#ff6b7d',shape:t.side==='buy'?'arrowUp':'arrowDown',text:t.side==='buy'?'bought':'sold'}}).filter(Boolean);
   candleS.setMarkers(marks);
-  chart.timeScale().applyOptions({secondsVisible:gran<60,timeVisible:gran<86400});
-  chart.timeScale().setVisibleLogicalRange({from:cs.length-(gran===86400?140:120),to:cs.length+3});
+  chart.timeScale().applyOptions({secondsVisible:g<60,timeVisible:g<86400});
+  chart.timeScale().setVisibleLogicalRange({from:cs.length-(g===86400?140:120),to:cs.length+3});
   renderCoinState();
 }
 function renderCoinState(){
   const cs=daily[coin];const p=live[coin];if(!cs||!p)return;
   const line=smaLine(cs).at(-1)?.value;const own=holdings()[coin]>0;
-  const st=$('coinState');st.innerHTML='';const pill=document.createElement('span');pill.className='pill '+(own?'in':'out');pill.textContent=own?'bot owns it':'bot is waiting';
-  st.append(pill,document.createTextNode(line?(p>=line?`going up: ${pct(p/line-1)} above the trend line`:`the bot buys if ${coin} rises about ${pct(line/p-1).slice(1)} (to the trend line)`):''));
+  const st=$('coinState');st.textContent='';const pill=document.createElement('span');pill.className='pill '+(own?'in':'out');pill.textContent=own?'bot owns it':'bot is waiting';
+  const detail=document.createElement('span');detail.textContent=line?(p>=line?`going up: ${pct(p/line-1)} above the trend line`:`the bot buys if ${coin} rises about ${pct(line/p-1).slice(1)} (to the trend line)`):'';st.append(pill,detail);
 }
 
 async function seedSecBars(c){
@@ -241,30 +256,69 @@ async function seedSecBars(c){
 }
 
 /* Live prices: Coinbase WebSocket stream, with polling as a fallback */
-let lastTick=0;
+const wsTicks={}, restPending=new Set();
+let ws, openedAt=0, backoff=5000;
+function renderSecNote(c){
+  const bars=secBars[c],seconds=bars.length?bars.at(-1).time-bars[0].time+1:0;
+  const coverage=seconds>=60?`${Math.round(seconds/60)} min`:`${seconds} s`;
+  const note=$('tfNote'),label=`1-second candles: last ${coverage} of Coinbase trades, then live.`;
+  if(note.textContent!==label)note.textContent=label;
+}
 function onPrice(c,p){
-  const prev=live[c];live[c]=p;lastTick=Date.now();
-  const sec=Math.floor(lastTick/1000),sb=secBars[c],last=sb[sb.length-1];
+  const prev=live[c];live[c]=p;
+  const sec=Math.floor(Date.now()/1000),sb=secBars[c],last=sb[sb.length-1];
   if(last&&last.time===sec){last.close=p;last.high=Math.max(last.high,p);last.low=Math.min(last.low,p)}
   else{sb.push({time:sec,open:last?last.close:p,high:Math.max(last?last.close:p,p),low:Math.min(last?last.close:p,p),close:p});if(sb.length>900)sb.shift()}
   $('dot').className='dot on';$('liveTxt').textContent='Live';
   if(c===coin){const el=$('price');el.textContent=`${c} ${eur(p,p>100?0:2)}`;if(prev){el.classList.toggle('up',p>prev);el.classList.toggle('down',p<prev)}
-    if(gran===1&&candleS){candleS.update({...secBars[c][secBars[c].length-1]})}
-    else if(lastBar&&candleS){const bucket=Math.floor(Date.now()/1000/gran)*gran;
-      lastBar=bucket>lastBar.time?{time:bucket,open:lastBar.close,high:Math.max(lastBar.close,p),low:Math.min(lastBar.close,p),close:p}
-                                 :{...lastBar,close:p,high:Math.max(lastBar.high,p),low:Math.min(lastBar.low,p)};
-      candleS.update(lastBar)}}
-  if(c===coin&&!$('chart3d').hidden&&Date.now()-(window._c3t||0)>2000){window._c3t=Date.now();if(gran===1)shownCandles=secBars[coin];chart3d()}
+  }
+  if(c===displayedCoin&&c===coin&&gran===displayedGran){
+    if(gran===1){lastBar=sb.at(-1);renderSecNote(c)}
+    else{
+      const bucket=Math.floor(sec/gran)*gran,open=lastBar?.close??p;
+      lastBar=!lastBar||bucket>lastBar.time?{time:bucket,open,high:Math.max(open,p),low:Math.min(open,p),close:p}
+        :{...lastBar,close:p,high:Math.max(lastBar.high,p),low:Math.min(lastBar.low,p)};
+    }
+    if(shownCandles.at(-1)?.time===lastBar.time)shownCandles[shownCandles.length-1]=lastBar;
+    else{shownCandles.push(lastBar);if(gran===1&&shownCandles.length>900)shownCandles.shift()}
+    candleS.update(lastBar);
+    if(!$('chart3d').hidden&&Date.now()-(window._c3t||0)>2000){window._c3t=Date.now();chart3d()}
+  }
   renderMoney();
 }
-function stream(){
-  let ws;try{ws=new WebSocket('wss://ws-feed.exchange.coinbase.com')}catch{return}
-  ws.onopen=()=>ws.send(JSON.stringify({type:'subscribe',product_ids:COINS.map(c=>c+'-EUR'),channels:['ticker']}));
-  ws.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.type==='ticker'&&m.price)onPrice(m.product_id.split('-')[0],+m.price)}catch{}};
-  ws.onclose=()=>{setTimeout(stream,5000)};
+function reconnect(){
+  setTimeout(stream,backoff);backoff=Math.min(backoff*2,60000);
 }
-setInterval(async()=>{if(Date.now()-lastTick<20000)return;$('dot').className='dot';$('liveTxt').textContent='Reconnecting…';
-  for(const c of COINS){try{const t=await getJSON(`${API}${c}-EUR/ticker`);onPrice(c,+t.price)}catch{}}},10000);
+function stream(){
+  try{ws=new WebSocket('wss://ws-feed.exchange.coinbase.com')}catch{reconnect();return}
+  ws.onopen=()=>{
+    openedAt=Date.now();
+    ws.send(JSON.stringify({type:'subscribe',product_ids:COINS.map(c=>c+'-EUR'),channels:['ticker']}));
+  };
+  ws.onmessage=e=>{try{
+    const m=JSON.parse(e.data),c=m.product_id?.split('-')[0],p=+m.price,time=Date.parse(m.time);
+    if(m.type!=='ticker'||!COINS.includes(c)||!Number.isFinite(p)||p<=0||!Number.isFinite(time))return;
+    if(time<(wsTicks[c]?.time??-Infinity))return;
+    wsTicks[c]={time,received:Date.now()};backoff=5000;onPrice(c,p);
+  }catch{}};
+  ws.onclose=reconnect;
+}
+setInterval(()=>{
+  if(ws?.readyState===WebSocket.OPEN&&COINS.some(c=>Date.now()-Math.max(openedAt,wsTicks[c]?.received??0)>=30000))ws.close();
+},1000);
+setInterval(()=>{
+  for(const c of COINS){
+    const tick=wsTicks[c];
+    if((ws?.readyState===WebSocket.OPEN&&Date.now()-Math.max(openedAt,tick?.received??0)<20000)||restPending.has(c))continue;
+    $('dot').className='dot';$('liveTxt').textContent='Reconnecting…';
+    restPending.add(c);
+    getJSON(`${API}${c}-EUR/ticker`).then(t=>{
+      const latest=wsTicks[c],time=Date.parse(t.time),p=+t.price;
+      if(latest&&(Number.isFinite(time)?time<=latest.time:latest!==tick))return;
+      if(Number.isFinite(p)&&p>0)onPrice(c,p);
+    }).catch(()=>{}).finally(()=>restPending.delete(c));
+  }
+},10000);
 
 let queued=false;
 function renderMoney(){if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;
@@ -282,7 +336,7 @@ function renderRace(){
   if(!$('race3d').hidden)race3d();
   const rows=race&&race.rows&&[...race.rows].sort((x,y)=>y.value_eur-x.value_eur);if(!rows||!rows.length)return;
   $('raceTime').textContent='updated '+(race.saved_at_utc||'').replace('T',' ').slice(0,16)+' UTC';
-  const box=$('race');box.innerHTML='';const vals=rows.map(r=>+r.value_eur),max=Math.max(...vals),min=Math.min(...vals);
+  const box=$('race');box.textContent='';const vals=rows.map(r=>+r.value_eur),max=Math.max(...vals),min=Math.min(...vals);
   rows.forEach((r,i)=>{
     const d=document.createElement('div');d.className='racer';d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-expanded','false');
     const rank=document.createElement('div');rank.className='rank';rank.textContent=i+1;
@@ -299,7 +353,7 @@ function renderRace(){
   });
 }
 function renderTrades(){
-  const log=((state&&state.trade_log)||[]).slice().reverse();if(!log.length)return;const tb=$('trades');tb.innerHTML='';
+  const log=((state&&state.trade_log)||[]).slice().reverse();if(!log.length)return;const tb=$('trades');tb.textContent='';
   for(const t of log.slice(0,50)){const tr=document.createElement('tr');
     for(const [v,cls] of [[t.at_utc.replace('T',' ').slice(0,16)],[t.asset],[t.side==='buy'?'bought':'sold',t.side==='buy'?'pos':'neg'],[eur(t.gross_eur)],[eur(t.price_eur,0)]]){const td=document.createElement('td');td.textContent=v;if(cls)td.className=cls;tr.append(td)}
     tb.append(tr)}
@@ -319,7 +373,11 @@ function race3d(){
     cv.addEventListener('pointerup',()=>r3.drag=null);
     (function loop(){if(!$('race3d').hidden&&!document.hidden){const w=cv.clientWidth,h=cv.clientHeight;if(cv.width!==Math.floor(w*r3.R.getPixelRatio())){r3.R.setSize(w,h,false);r3.C.aspect=w/h;r3.C.updateProjectionMatrix()}
       if(r3.drag===null&&!RM)r3.spin+=.003;r3.C.position.set(Math.sin(r3.spin)*10,5.4,Math.cos(r3.spin)*10);r3.C.lookAt(0,1,0);r3.R.render(r3.S,r3.C)}requestAnimationFrame(loop)})();}
-  const G=r3.G;while(G.children.length)G.remove(G.children[0]);
+  const G=r3.G;while(G.children.length){
+    const m=G.children[0];if(m.isMesh)m.geometry.dispose();
+    if(m.isSprite)m.material.map.dispose();
+    m.material.dispose();G.remove(m);
+  }
   const vals=rows.map(r=>+r.value_eur),lo=Math.min(...vals,500)-5,hi=Math.max(...vals,500)+5;
   rows.forEach((r,i)=>{
     const a=(i/rows.length)*Math.PI*2,x=Math.sin(a)*3,z=Math.cos(a)*3,h=.3+2.7*(+r.value_eur-lo)/(hi-lo),up=+r.value_eur>=500;
@@ -333,21 +391,22 @@ function race3d(){
 /* 3D candles: last 80 candles of the current view as boxes, drag to spin */
 let c3=null;
 function chart3d(){
-  const cs=shownCandles.slice(-80);if(!cs.length||!window.THREE)return;
+  const cs=shownCandles.slice(-80);if(!window.THREE||(!cs.length&&!c3))return;
   const cv=$('chart3dc');
   if(!c3){let R;try{R=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true})}catch{return}
     R.setPixelRatio(Math.min(devicePixelRatio,2));const S=new THREE.Scene(),C=new THREE.PerspectiveCamera(38,1,.1,200);
     S.add(new THREE.AmbientLight(0xffffff,.6));const L=new THREE.DirectionalLight(0xffffff,.8);L.position.set(-4,8,6);S.add(L);
     const grid=new THREE.GridHelper(14,14,0x2c4a78,0x1a2c4a);S.add(grid);const G=new THREE.Group();S.add(G);
-    c3={R,S,C,G,spin:-.5,drag:null};
+    const up=new THREE.MeshStandardMaterial({color:0x3ee6a0,emissive:0x0b3a28,roughness:.4}),dn=new THREE.MeshStandardMaterial({color:0xff6b7d,emissive:0x3a0b14,roughness:.4});
+    c3={R,S,C,G,up,dn,spin:-.5,drag:null};
     cv.addEventListener('pointerdown',e=>{c3.drag=e.clientX;cv.setPointerCapture(e.pointerId)});
     cv.addEventListener('pointermove',e=>{if(c3.drag!==null){c3.spin+=(e.clientX-c3.drag)*.008;c3.drag=e.clientX}});
     cv.addEventListener('pointerup',()=>c3.drag=null);
     (function loop(){if(!$('chart3d').hidden&&!document.hidden){const w=cv.clientWidth,h=cv.clientHeight;if(cv.width!==Math.floor(w*c3.R.getPixelRatio())){c3.R.setSize(w,h,false);c3.C.aspect=w/h;c3.C.updateProjectionMatrix()}
       if(c3.drag===null&&!RM)c3.spin+=.0015;c3.C.position.set(Math.sin(c3.spin)*15,6.5,Math.cos(c3.spin)*15);c3.C.lookAt(0,2.2,0);c3.R.render(c3.S,c3.C)}requestAnimationFrame(loop)})();}
-  const G=c3.G;while(G.children.length){const m=G.children.pop();m.geometry&&m.geometry.dispose()}
+  const {G,up,dn}=c3;while(G.children.length){const m=G.children[0];m.geometry.dispose();G.remove(m)}
+  if(!cs.length)return;
   const lo=Math.min(...cs.map(c=>c.low)),hi=Math.max(...cs.map(c=>c.high)),y=v=>(v-lo)/((hi-lo)||1)*5,w=11/cs.length;
-  const up=new THREE.MeshStandardMaterial({color:0x3ee6a0,emissive:0x0b3a28,roughness:.4}),dn=new THREE.MeshStandardMaterial({color:0xff6b7d,emissive:0x3a0b14,roughness:.4});
   cs.forEach((c,i)=>{const x=-5.5+(i+.5)*w,m=c.close>=c.open?up:dn,b0=y(Math.min(c.open,c.close)),b1=Math.max(y(Math.max(c.open,c.close)),b0+.03);
     const body=new THREE.Mesh(new THREE.BoxGeometry(w*.7,b1-b0,w*.7),m);body.position.set(x,(b0+b1)/2,0);G.add(body);
     const wick=new THREE.Mesh(new THREE.BoxGeometry(w*.12,Math.max(y(c.high)-y(c.low),.02),w*.12),m);wick.position.set(x,(y(c.high)+y(c.low))/2,0);G.add(wick)});
@@ -359,15 +418,19 @@ function seg(id,attr,fn){document.querySelectorAll(`#${id} button`).forEach(b=>b
 seg('coins','coin',c=>{coin=c;const p=live[c];if(p)$('price').textContent=`${c} ${eur(p,p>100?0:2)}`;if(chart)drawChart()});
 seg('tfs','g',g=>{gran=+g;if(chart)drawChart()});
 
+async function refreshDaily(){
+  await Promise.all(COINS.map(async c=>{try{daily[c]=await candles(c,86400)}catch{}}));
+  renderMoney();
+}
 (async()=>{
   if(window.LightweightCharts)makeChart();else $('coinState').textContent='Chart library could not load.';
   await loadSaved();
-  for(const c of COINS){try{daily[c]=await candles(c,86400)}catch{}}
+  await refreshDaily();
   await Promise.all(COINS.map(seedSecBars));
   if(chart)await drawChart();
   for(const c of COINS){const cs=daily[c],sb=secBars[c];if(!live[c]&&(sb.length||cs))onPrice(c,sb.length?sb.at(-1).close:cs.at(-1).close)}
   stream();
-  setInterval(loadSaved,300000);setInterval(()=>{if(chart)drawChart()},180000);
+  setInterval(loadSaved,300000);setInterval(async()=>{await refreshDaily();if(chart)drawChart()},180000);
 })();
 </script>
 </body>
