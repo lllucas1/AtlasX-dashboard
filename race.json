@@ -164,7 +164,7 @@
     {
       "id": "R0",
       "name": "Just hold",
-      "value_eur": 491.23,
+      "value_eur": 491.24,
       "change_pct": -1.75,
       "shadow_value_eur": 492.48,
       "trades": 2,
@@ -192,7 +192,7 @@
     {
       "id": "R3",
       "name": "Golden cross",
-      "value_eur": 491.23,
+      "value_eur": 491.24,
       "change_pct": -1.75,
       "shadow_value_eur": 492.48,
       "trades": 2,
@@ -218,5 +218,5 @@
       "rule": "Owns a coin while its 50-day average is above its 200-day average."
     }
   ],
-  "saved_at_utc": "2026-11-28T10:13:51+00:00"
+  "saved_at_utc": "2026-11-28T10:26:44+00:00"
 }
