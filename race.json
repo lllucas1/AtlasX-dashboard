@@ -94,9 +94,9 @@
     {
       "id": "R0",
       "name": "Just hold",
-      "value_eur": 494.04,
-      "change_pct": -1.19,
-      "shadow_value_eur": 495.28,
+      "value_eur": 491.93,
+      "change_pct": -1.61,
+      "shadow_value_eur": 493.17,
       "trades": 2,
       "recent_trades": [
         {
@@ -114,7 +114,7 @@
           "price": 1534.65
         }
       ],
-      "worst_drop_pct": 3.49,
+      "worst_drop_pct": 3.77,
       "stale_price": false,
       "holding": "50% BTC, 50% ETH",
       "rule": "Buys 50% BTC + 50% ETH once and never sells. The yardstick."
@@ -122,9 +122,9 @@
     {
       "id": "R3",
       "name": "Golden cross",
-      "value_eur": 494.04,
-      "change_pct": -1.19,
-      "shadow_value_eur": 495.28,
+      "value_eur": 491.93,
+      "change_pct": -1.61,
+      "shadow_value_eur": 493.17,
       "trades": 2,
       "recent_trades": [
         {
@@ -142,7 +142,7 @@
           "price": 1534.65
         }
       ],
-      "worst_drop_pct": 3.49,
+      "worst_drop_pct": 3.77,
       "stale_price": false,
       "holding": "50% BTC, 50% ETH",
       "rule": "Owns a coin while its 50-day average is above its 200-day average."
@@ -218,5 +218,5 @@
       "rule": "Day trader: buys in the evening if the coin rose that day, sells at midnight."
     }
   ],
-  "saved_at_utc": "2026-11-28T07:51:28+00:00"
+  "saved_at_utc": "2026-11-28T09:24:55+00:00"
 }
