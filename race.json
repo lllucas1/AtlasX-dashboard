@@ -94,9 +94,9 @@
     {
       "id": "R0",
       "name": "Just hold",
-      "value_eur": 494.93,
-      "change_pct": -1.01,
-      "shadow_value_eur": 496.17,
+      "value_eur": 495.48,
+      "change_pct": -0.9,
+      "shadow_value_eur": 496.73,
       "trades": 2,
       "recent_trades": [
         {
@@ -122,9 +122,9 @@
     {
       "id": "R3",
       "name": "Golden cross",
-      "value_eur": 494.93,
-      "change_pct": -1.01,
-      "shadow_value_eur": 496.17,
+      "value_eur": 495.48,
+      "change_pct": -0.9,
+      "shadow_value_eur": 496.73,
       "trades": 2,
       "recent_trades": [
         {
@@ -218,5 +218,5 @@
       "rule": "Day trader: buys in the evening if the coin rose that day, sells at midnight."
     }
   ],
-  "saved_at_utc": "2026-11-28T03:29:29+00:00"
+  "saved_at_utc": "2026-11-28T04:36:09+00:00"
 }
